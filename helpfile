@@ -1,0 +1,27 @@
+pacassign takes the following options:
+	pacassign -h
+		Shows this help text.
+	pacassign FILEPATH... PACKAGE
+		Assigns the given file(s) to the given package, which will be 
+		removed if that package is uninstalled while no other package
+		owns the file(s).
+	pacassign -t FILEPATH... PACKAGE
+		Assigns the given file to the given package (sticky), which will
+		NOT be removed if the package is uninstalled, but the assignment
+		will be reset.
+	pacassign -r FILEPATH... [PACKAGE... ]
+		Removes assignment of the given file(s) to the given package(s).
+		If no package is specified all assignments of the file(s) will be
+		removed.
+	pacassign -o FILEPATH...
+		Lists any package that owns or was assigned the given file(s).
+		This is a superset of `pacman -Qo`. 
+	pacassign -l [PACKAGE... ]
+		Lists files manually assigned to the given packages, excluding
+		sticky assignments. If no package is specified it will list 
+		every file manually assigned through pacassign. 
+	pacassign -lt [PACKAGE... ]
+		The same as `pacassign -l`, but includes sticky assignments.
+	pacassign -ll [PACKAGE... ]
+		The same as `pacassign -lt`, but includes regular file ownership
+		as listed by `pacman -Ql`.
