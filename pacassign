@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Source config file
+# source /usr/local/etc/pacassign.conf
+helpfile=~/projects/technical/pacassign/README.txt
+datafile=/tmp/datafile
+# Figure out what format is being used.
+if [ $1 = "-h" ]; then
+	cat "$helpfile"
+	exit
+fi
+if [ $# = 0 ]; then
+	echo "Not enough arguments; use 'pacassign -h' for help."
+	exit
+fi
+# Find which args are filepaths and package names.
+if [ $1 = "-l" ]; then
+	oper="list"
+	packname="$2"
+elif [ $1 = "-lt" ]; then
+	oper="list"
+	packname="$2"
+elif [ $1 = "-ll" ]; then
+	oper="list"
+	packname="$2"
+elif [ $1 = "-o" ]; then
+	oper="owner"
+	filepath="`realpath "$2"`"
+elif [ $1 = "-r" ]; then
+	oper="remove"
+	filepath="`realpath "$2"`"
+	packname="$3"
+elif [ $1 = "-t" ]; then
+	oper="add"
+	filepath="`realpath "$2"`"
+	packname="$3"
+elif [ -f $1 ]; then 
+	oper="add"
+	filepath="`realpath "$1"`"
+	packname="$2"
+else
+	echo "Invalid argument; use 'pacassign -h' for help."
+fi
+if [ "$oper" = "list" ]; then
+	if [ $1 = "-l" ]; then
+		cat "$datafile" | grep "^$packname" | grep -v "^$packname [t]"
+	elif [ $1 = "-lt" ]; then
+		cat "$datafile" | grep "^$packname"
+	elif [ $1 = "-ll" ]; then
+		cat <(pacman -Ql $packname) "$datafile" | sort
+	fi
+	exit
+elif [ "$oper" = "owner" ]; then
+	ownerlist="`cat "$datafile" | grep "^$filepath" | cut -d ' ' -f 1-1`"
+	fmt_ownerlist="$datafile is owned by `xargs pacman -Q $ownerlist`"
+	cat "`pacman -Qo "$filepath"`" "$fmt_ownerlist" | sort
+	exit
+elif [ "$oper" = "remove" ]; then
+	ownerlist="`cat "$datafile" | grep "^$filepath" | grep "^$packname"`"
+	comm -23 "$ownerlist" "$datafile" | tee "$datafile"
+	exit
+elif [ "$oper" = "add" ]; then
+	if [ $1 = "-t" ]; then
+		echo "$packname [t] $filepath" >> "$datafile"
+	else
+		echo "$packname $filepath" >> "$datafile"
+	fi
+	sort "$datafile" | tee "$datafile"
+	exit
+fi
