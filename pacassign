@@ -1,69 +1,137 @@
 #!/usr/bin/env bash
-# Source config file
-# source /usr/local/etc/pacassign.conf
-helpfile=~/projects/technical/pacassign/README.txt
-datafile=/tmp/datafile
-# Figure out what format is being used.
-if [ $1 = "-h" ]; then
-	cat "$helpfile"
-	exit
+# Check the user being run as. It needs to match the assignment of
+# PACASSIGN_NEEDS_ROOT. Determine the datafile path from user.
+if [ "`/usr/bin/id -u`" = "0" ]; then
+	if [ "$PACASSIGN_NEEDS_ROOT" = "yes" ]; then
+		datafile=/var/local/lib/pacassign/datafile
+	else
+		echo "Environment variable PACASSIGN_NEEDS_ROOT \
+		improperly set."
+		exit
+	fi
+else
+	if [ "$PACASSIGN_NEEDS_ROOT" = "no" ]; then
+		if [ -n "$XDG_DATA_HOME" ]; then
+			datafile="$XDG_DATA_HOME/pacassign/datafile"
+		else 
+			datafile="$HOME/.local/share/pacassign/datafile"
+		fi
+	else
+		echo "Environment variable PACASSIGN_NEEDS_ROOT \
+		improperly set."
+		exit
+	fi
 fi
+
+# Make sure there is at least one argument.
 if [ $# = 0 ]; then
 	echo "Not enough arguments; use 'pacassign -h' for help."
 	exit
 fi
-# Find which args are filepaths and package names.
-if [ $1 = "-l" ]; then
+
+# Read first argument to determine what function to run later.
+if [ $1 = "-l" ] || [ $1 = "-lt" ] || [ $1 = "-ll" ]; then
 	oper="list"
-	packname="$2"
-elif [ $1 = "-lt" ]; then
-	oper="list"
-	packname="$2"
-elif [ $1 = "-ll" ]; then
-	oper="list"
-	packname="$2"
 elif [ $1 = "-o" ]; then
 	oper="owner"
-	filepath="`realpath "$2"`"
+elif [ $1 = "-t" ] || [ $1 = "-at" ] || [ $1 = "-a" ]; then
+	oper="add"
 elif [ $1 = "-r" ]; then
 	oper="remove"
-	filepath="`realpath "$2"`"
-	packname="$3"
-elif [ $1 = "-t" ]; then
-	oper="add"
-	filepath="`realpath "$2"`"
-	packname="$3"
-elif [ -f $1 ]; then 
-	oper="add"
-	filepath="`realpath "$1"`"
-	packname="$2"
-else
-	echo "Invalid argument; use 'pacassign -h' for help."
+elif [ $1 = "-h" ]; then
+	oper="showhelp"
 fi
-if [ "$oper" = "list" ]; then
-	if [ $1 = "-l" ]; then
-		cat "$datafile" | grep "^$packname" | grep -v "^$packname [t]"
-	elif [ $1 = "-lt" ]; then
-		cat "$datafile" | grep "^$packname"
-	elif [ $1 = "-ll" ]; then
-		cat <(pacman -Ql $packname) "$datafile" | sort
-	fi
-	exit
-elif [ "$oper" = "owner" ]; then
-	ownerlist="`cat "$datafile" | grep "^$filepath" | cut -d ' ' -f 1-1`"
-	fmt_ownerlist="$datafile is owned by `xargs pacman -Q $ownerlist`"
-	cat "`pacman -Qo "$filepath"`" "$fmt_ownerlist" | sort
-	exit
-elif [ "$oper" = "remove" ]; then
-	ownerlist="`cat "$datafile" | grep "^$filepath" | grep "^$packname"`"
-	comm -23 "$ownerlist" "$datafile" | tee "$datafile"
-	exit
-elif [ "$oper" = "add" ]; then
-	if [ $1 = "-t" ]; then
-		echo "$packname [t] $filepath" >> "$datafile"
-	else
-		echo "$packname $filepath" >> "$datafile"
-	fi
-	sort "$datafile" | tee "$datafile"
-	exit
+
+# Save the first variable (flag).
+flag=$1
+
+# Use the 'add' function if the first variable is not a flag. If it is, shift.
+if [ -z $oper ]; then
+	flag="noflag"
+	oper="add"
+else 
+	shift
 fi
+
+# Set some more useful variables instead of doing it in multiple places later.
+arg_total=$#
+arg_minusone=$((arg_total - 1))
+
+# Define all functions called later.
+showhelp () {cat /usr/local/share/pacassign/helpfile}
+
+list () {
+if [ $flag = "-l" ]; then
+	filelist="`grep -f <(printf "^%s /\n" "${packages[@]}") "$datafile" \
+	| sort`"
+elif [ $flag = "-lt" ]
+	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
+	| sort`"
+elif [ $flag = "-ll" ]
+	pre_filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
+	| sort`"
+	paclist="`pacman -Ql "${packages[*]}" | sort`"
+	filelist="`comm $pre_filelist $paclist`"
+fi
+echo "$filelist"
+}
+
+owner () {
+pre_packagelist="`grep -f <(printf " %s$\n" "${files[@]}") "$datafile"`"
+pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
+| xargs pacman -Q`"
+file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
+| sed -e 's/$/ is owned by/'`"
+packagelist="paste -d ' ' <(echo "$file_packagelist") \
+<(echo "$pack_packagelist") | sort"
+echo "packagelist"
+}
+
+add () {
+}
+remove () {
+}
+
+# Check for validity of all arguments and if valid, define all variables.
+# Then run the corresponding function defined above.
+if [ $oper = "list" ]; then
+	for i in seq (1 $arg_total); do
+		pacman -Qq ${i} 2>/dev/null || echo \
+		"Package not found; use 'pacassign -h' for help"; exit
+	done
+	packages=( "$@" )
+	list () 
+elif [ $oper = "owner" ]; then
+	if [ $# = "0" ]; then
+		echo "Not enough arguments; use 'pacassign -h' for help"
+		exit
+	fi
+	for i in seq (1 $arg_total); do
+		test -f ${i} || echo \
+		"File not found; use 'pacassign -h' for help"; exit
+	done
+	files=( "$@" )
+	owner ()
+elif [ $oper = "add" ]; then
+	pacman -Qq ${arg_total} 2>/dev/null || echo \ 
+	"Package not found; use 'pacassign -h' for help"; exit
+	for i in seq (1 $arg_minusone); do
+		test -f ${i} || echo \
+		"File not found; use 'pacassign -h' for help"; exit
+	done
+	files=${@:1:$#-1}
+	packages=${arg_total}
+	add ()
+elif [ $oper = "remove" ]; then
+	pacman -Qq ${arg_total} 2>/dev/null || echo \
+	"Package not found; use 'pacassign -h' for help"; exit
+	for i in seq (1 $arg_minusone); do 
+		test -f ${i} || echo \
+		"File not found; use 'pacassign -h' for help"; exit
+	done
+	files=${@:1:$#-1}
+	packages=${arg_total}
+	remove ()
+elif [ $oper = "showhelp" ]; then
+	showhelp ()
+fi		
