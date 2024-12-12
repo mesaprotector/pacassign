@@ -53,21 +53,19 @@ else
 	shift
 fi
 
-# Set some more useful variables instead of doing it in multiple places later.
-arg_total=$#
-arg_minusone=$((arg_total - 1))
-
 # Define all functions called later.
-showhelp () {cat /usr/local/share/pacassign/helpfile}
+showhelp () {
+cat /usr/local/share/pacassign/helpfile
+}
 
 list () {
 if [ $flag = "-l" ]; then
 	filelist="`grep -f <(printf "^%s /\n" "${packages[@]}") "$datafile" \
 	| sort`"
-elif [ $flag = "-lt" ]
+elif [ $flag = "-lt" ]; then
 	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
 	| sort`"
-elif [ $flag = "-ll" ]
+elif [ $flag = "-ll" ]; then
 	pre_filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
 	| sort`"
 	paclist="`pacman -Ql "${packages[*]}" | sort`"
@@ -82,56 +80,58 @@ pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
 | xargs pacman -Q`"
 file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
 | sed -e 's/$/ is owned by/'`"
-packagelist="paste -d ' ' <(echo "$file_packagelist") \
-<(echo "$pack_packagelist") | sort"
-echo "packagelist"
+packagelist="paste -d ' ' <(echo \"$file_packagelist\") \
+<(echo \"$pack_packagelist\") | sort"
+echo "$packagelist"
 }
 
 add () {
+true
 }
 remove () {
+true
 }
 
 # Check for validity of all arguments and if valid, define all variables.
 # Then run the corresponding function defined above.
 if [ $oper = "list" ]; then
-	for i in seq (1 $arg_total); do
-		pacman -Qq ${i} 2>/dev/null || echo \
-		"Package not found; use 'pacassign -h' for help"; exit
+	for i in "$@"; do
+		pacman -Qq ${i} 2>/dev/null || { echo \
+		"Package not found; use 'pacassign -h' for help"; exit; }
 	done
 	packages=( "$@" )
-	list () 
+	list 
 elif [ $oper = "owner" ]; then
 	if [ $# = "0" ]; then
 		echo "Not enough arguments; use 'pacassign -h' for help"
 		exit
 	fi
-	for i in seq (1 $arg_total); do
-		test -f ${i} || echo \
-		"File not found; use 'pacassign -h' for help"; exit
+	for i in "$@"; do
+		test -f ${i} || { echo \
+		"File not found; use 'pacassign -h' for help"; exit; }
 	done
 	files=( "$@" )
-	owner ()
+	owner
 elif [ $oper = "add" ]; then
-	pacman -Qq ${arg_total} 2>/dev/null || echo \ 
-	"Package not found; use 'pacassign -h' for help"; exit
-	for i in seq (1 $arg_minusone); do
-		test -f ${i} || echo \
-		"File not found; use 'pacassign -h' for help"; exit
+	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
+	"Package not found; use 'pacassign -h' for help"; exit; }
+	for i in "${@:1:$#-1}"; do
+		test -f ${i} || { echo \
+		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	files=${@:1:$#-1}
-	packages=${arg_total}
-	add ()
+	files="${@:1:$#-1}"
+	packages="${@: -1}"
+	add
 elif [ $oper = "remove" ]; then
-	pacman -Qq ${arg_total} 2>/dev/null || echo \
-	"Package not found; use 'pacassign -h' for help"; exit
-	for i in seq (1 $arg_minusone); do 
-		test -f ${i} || echo \
-		"File not found; use 'pacassign -h' for help"; exit
+	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
+	"Package not found; use 'pacassign -h' for help"; exit; }
+	for i in "${@:1:$#-1}"; do 
+		test -f ${i} || { echo \
+		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	files=${@:1:$#-1}
-	packages=${arg_total}
-	remove ()
+	files="${@:1:$#-1}"
+	packages="${@: -1}"
+	remove
 elif [ $oper = "showhelp" ]; then
-	showhelp ()
+	showhelp
 fi		
