@@ -86,10 +86,51 @@ echo "$packagelist"
 }
 
 add () {
-true
+for file in $files; do
+	get_parents $file
+	new_datafile=""
+	add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages/" | sort`"
+	if [ $flag = "-t" ] || [ $flag = "-at" ]; then
+		pre_datafile="`comm -3 <(echo "$add_parent") "$datafile"`"
+		add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages [t]" | sort`" 
+		new_datafile="`comm -3 <(echo "$add_parent") <(echo "$pre_datafile")`"
+	else 
+		if [ "`comm -12 <(echo "$add_parent") "$datafile" | wc -l`" = 0 ]; then
+			add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages [t]/"`"	
+		fi
+		pre_datafile="`cat "$datafile" \
+		sed -e "s/^$packages [t] $file/^$packages $file/" | sort`"
+		new_datafile+="`comm -3 <(echo "$add_parent" \
+		| sed -e "s/^$packages [t] $file$/^$packages $file$/") <(echo "$pre_datafile")`"
+	fi
+done
+echo "$new_datafile" > "$datafile"
+echo "Assignment to $packages added."
 }
+
 remove () {
-true
+remove_with_child="`grep "^$packages" "$datafile" \
+| grep -f <(printf " %s\n" "${files[@]}") "$datafile"`"
+comm -1 <(echo "$remove_with_child") "$datafile"
+echo "Assignment to $packages removed."
+}
+
+# This function is used in `add ()` to list out parent directories of a path
+# and to control trailing slashes.
+get_parents () {
+if [ -d "$file" ]; then
+	trail_slash="yes"
+fi
+parentlist=(`echo "$file" | tr '/' '\n'`)
+substring=""
+for i in "${!parentlist[@]}"; do
+	substring+="/${parentlist[index]}"
+	if [ "$trail_slash" = "yes" ]; then
+		parents="`printf "$substring/\n"`"
+	else
+		parents="`printf "$substring\n"`"
+	fi
+done
 }
 
 # Check for validity of all arguments and if valid, define all variables.
@@ -110,7 +151,8 @@ elif [ $oper = "owner" ]; then
 		test -f ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	files=( "$@" )
+	pre_files=( "$@" )
+	files="`realpath "${pre_files[@]}"`"
 	owner
 elif [ $oper = "add" ]; then
 	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
@@ -119,7 +161,8 @@ elif [ $oper = "add" ]; then
 		test -f ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	files="${@:1:$#-1}"
+	pre_files=("${@:1:$#-1}")
+	files="`realpath "${pre_files[@]}"`"
 	packages="${@: -1}"
 	add
 elif [ $oper = "remove" ]; then
@@ -129,7 +172,8 @@ elif [ $oper = "remove" ]; then
 		test -f ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	files="${@:1:$#-1}"
+	pre_files=("${@:1:$#-1}")
+	files="`realpath "${pre_files[@]}"`"
 	packages="${@: -1}"
 	remove
 elif [ $oper = "showhelp" ]; then
