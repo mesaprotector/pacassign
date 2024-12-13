@@ -69,10 +69,10 @@ elif [ $flag = "-lt" ]; then
 elif [ $flag = "-ll" ]; then
 	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
 	| sort`"
-	filelist+="`pacman -Ql "${packages[*]}" | sort`"
-	#filelist="`comm <(echo "$pre_filelist") "$paclist"`"
+	filelist+=" 
+`pacman -Ql "${packages[*]}" | sort`"
 fi
-echo "$filelist"
+echo "$filelist" | sort
 }
 
 owner () {
@@ -94,20 +94,30 @@ echo "$packagelist"
 add () {
 for file in $files; do
 	get_parents $file
+	if [ -d "$file" ]; then
+		self="$file/"
+	else
+		self="$file"
+	fi
 	new_datafile=""
-	add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages/" | sort`"
+	_self="${self//\//\\/}"
+	add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages /" | sort`"
 	if [ $flag = "-t" ] || [ $flag = "-at" ]; then
-		pre_datafile="`comm -3 <(echo "$add_parent") "$datafile"`"
-		add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages [t]" | sort`" 
-		new_datafile="`comm -3 <(echo "$add_parent") <(echo "$pre_datafile")`"
+		pre_datafile="`comm -13 <(echo "$add_parent") "$datafile"`"
+		add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages \[t\] /" \
+		| sort`" 
+		new_datafile="`comm -3 <(echo "$add_parent") <(echo "$pre_datafile") \
+		| awk '{$1=$1;print}'`"
 	else 
 		if [ "`comm -12 <(echo "$add_parent") "$datafile" | wc -l`" = 0 ]; then
-			add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages [t]/"`"	
+			add_parent="`echo "${parents[@]}" \
+			| sed -e "s/^/$packages \[t\] /"`"	
 		fi
 		pre_datafile="`cat "$datafile" \
-		sed -e "s/^$packages [t] $file/^$packages $file/" | sort`"
+		| sed -e "s/^$packages \[t\] $_self/$packages $_self/" | sort`"
 		new_datafile+="`comm -3 <(echo "$add_parent" \
-		| sed -e "s/^$packages [t] $file$/^$packages $file$/") <(echo "$pre_datafile")`"
+		| sed -e "s/^$packages \[t\] $_self$/$packages $_self/") \
+		<(echo "$pre_datafile") | awk '{$1=$1;print}'`"
 	fi
 done
 echo "$new_datafile" > "$datafile"
@@ -116,8 +126,9 @@ echo "Assignment to $packages added."
 
 remove () {
 remove_with_child="`grep "^$packages" "$datafile" \
-| grep -f <(printf " %s\n" "${files[@]}") "$datafile"`"
-comm -1 <(echo "$remove_with_child") "$datafile"
+| grep -f <(printf " %s\n" "${files[@]}")`"
+pre_datafile="`cat "$datafile"`"
+comm -13 <(echo "$remove_with_child") <(echo "$pre_datafile") > "$datafile"
 echo "Assignment to $packages removed."
 }
 
@@ -143,7 +154,7 @@ done
 # Then run the corresponding function defined above.
 if [ $oper = "list" ]; then
 	for i in "$@"; do
-		pacman -Qq ${i} 2>/dev/null || { echo \
+		pacman -Qq ${i} &>/dev/null || { echo \
 		"Package not found; use 'pacassign -h' for help"; exit; }
 	done
 	packages=( "$@" )
@@ -161,7 +172,7 @@ elif [ $oper = "owner" ]; then
 	files="`realpath "${pre_files[@]}"`"
 	owner
 elif [ $oper = "add" ]; then
-	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
+	pacman -Qq "${@: -1}" &>/dev/null || { echo \
 	"Package not found; use 'pacassign -h' for help"; exit; }
 	for i in "${@:1:$#-1}"; do
 		test -e ${i} || { echo \
@@ -172,7 +183,7 @@ elif [ $oper = "add" ]; then
 	packages="${@: -1}"
 	add
 elif [ $oper = "remove" ]; then
-	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
+	pacman -Qq "${@: -1}" &>/dev/null || { echo \
 	"Package not found; use 'pacassign -h' for help"; exit; }
 	for i in "${@:1:$#-1}"; do 
 		test -e ${i} || { echo \
@@ -184,4 +195,4 @@ elif [ $oper = "remove" ]; then
 	remove
 elif [ $oper = "showhelp" ]; then
 	showhelp
-fi		
+fi
