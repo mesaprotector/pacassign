@@ -22,6 +22,7 @@ else
 		exit
 	fi
 fi
+touch "$datafile"
 
 # Make sure there is at least one argument.
 if [ $# = 0 ]; then
@@ -66,22 +67,27 @@ elif [ $flag = "-lt" ]; then
 	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
 	| sort`"
 elif [ $flag = "-ll" ]; then
-	pre_filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
+	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
 	| sort`"
-	paclist="`pacman -Ql "${packages[*]}" | sort`"
-	filelist="`comm $pre_filelist $paclist`"
+	filelist+="`pacman -Ql "${packages[*]}" | sort`"
+	#filelist="`comm <(echo "$pre_filelist") "$paclist"`"
 fi
 echo "$filelist"
 }
 
 owner () {
 pre_packagelist="`grep -f <(printf " %s$\n" "${files[@]}") "$datafile"`"
-pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
-| xargs pacman -Q`"
-file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
-| sed -e 's/$/ is owned by/'`"
-packagelist="paste -d ' ' <(echo \"$file_packagelist\") \
-<(echo \"$pack_packagelist\") | sort"
+if [ -z "$pre_packagelist" ]; then
+	packagelist="`pacman -Qo "${files[@]}"`"
+else
+	pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
+	| xargs pacman -Q`"
+	file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
+	| sed -e 's/$/ is owned by/'`"
+	packagelist="`paste -d ' ' <(echo "$file_packagelist") \
+	<(echo "$pack_packagelist") | sort`"
+	packagelist+="`pacman -Qo "${files[@]}"`"
+fi
 echo "$packagelist"
 }
 
@@ -148,7 +154,7 @@ elif [ $oper = "owner" ]; then
 		exit
 	fi
 	for i in "$@"; do
-		test -f ${i} || { echo \
+		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
 	pre_files=( "$@" )
@@ -158,7 +164,7 @@ elif [ $oper = "add" ]; then
 	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
 	"Package not found; use 'pacassign -h' for help"; exit; }
 	for i in "${@:1:$#-1}"; do
-		test -f ${i} || { echo \
+		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
 	pre_files=("${@:1:$#-1}")
@@ -169,7 +175,7 @@ elif [ $oper = "remove" ]; then
 	pacman -Qq "${@: -1}" 2>/dev/null || { echo \
 	"Package not found; use 'pacassign -h' for help"; exit; }
 	for i in "${@:1:$#-1}"; do 
-		test -f ${i} || { echo \
+		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
 	pre_files=("${@:1:$#-1}")
