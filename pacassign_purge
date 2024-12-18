@@ -1,0 +1,19 @@
+#!/bin/bash
+read -r $1
+filelist=("`pacassign -lq "$1"`")
+filelog=()
+for file in "${filelist[@]}"; do
+	if [ "`pacman -Qo "$file" 2>/dev/null | wc -l`" = 0 ]; then
+		filelog+=("$file")
+		if [ "$PACASSIGN_ENFORCE" = "yes" ]; then
+			runuser -u "$PACASSIGN_USER" \
+			rm -rf "$file" 2>/var/log/pacassign/errorlog
+		fi
+	fi
+done
+if [ "$PACASSIGN_ENFORCE" = "yes" ]; then
+	echo "The following files were removed by pacassign:"
+else
+	echo "The following files would have been removed by pacassign:"
+fi
+printf "%s\n" "${filelog[@]}"

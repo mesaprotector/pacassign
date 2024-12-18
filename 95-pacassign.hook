@@ -1,0 +1,11 @@
+[Trigger]
+Operation=Remove
+Type=Package
+Target=*
+
+[Action]
+Description=Remove manually assigned files
+When=PostTransaction
+Depends=pacassign
+Exec=/bin/bash -c 'while read f; do pacassign_purge f; done'
+NeedsTargets
