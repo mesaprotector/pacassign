@@ -14,6 +14,16 @@ Options supported:
 - sticky-assign a file to a package; it won't be removed with the package, but will still show up in queries (`pacassign -t`)
 - undo a previous assignment (`pacassign -r`)
 
+See helpfile for more detailed information.
+
 To protect against disasters (such as assigning your ~ to a single package), pacassign will sticky-assign all parent directories of any assigned file, so that they won't get removed; this can be manually overridden.
 
-Script is not fully functional yet; help welcome. 
+The script mostly works, but bugs almost certainly still exist; help welcome. 
+
+# Configuration
+
+There are only two configuration options; both are set by environment variable.
+
+The first one is PACASSIGN_USER. If set to "root", only root can run pacassign, and the pacman hook will run as root. If set to your regular user, you will be able to run pacassign without root, but pacassign will not be able to clean up files that you do not have permission to delete. 
+
+The second one is PACASSIGN_ENFORCE. If set to "yes" (VERY MUCH NOT RECOMMENDED UNTIL THIS SCRIPT HAS BEEN MORE THOROUGHLY TESTED!) then the pacman hook will delete files assigned to a package on its removal, provided they aren't owned by anything else. Otherwise, the pacman hook will just print the list of files it *would* have deleted.
