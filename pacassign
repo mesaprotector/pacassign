@@ -1,24 +1,22 @@
-#!/usr/bin/env bash
+#!//bin/bash
 # Check the user being run as. It needs to match the assignment of
-# PACASSIGN_NEEDS_ROOT. Determine the datafile path from user.
+# PACASSIGN_USER. Determine the datafile path from user.
 if [ "`/usr/bin/id -u`" = "0" ]; then
-	if [ "$PACASSIGN_NEEDS_ROOT" = "yes" ]; then
-		datafile=/var/local/lib/pacassign/datafile
+	if [ "$PACASSIGN_USER" = "root" ]; then
+		datafile=/var/lib/pacassign/datafile
 	else
-		echo "Environment variable PACASSIGN_NEEDS_ROOT \
-		improperly set."
+		echo "Variable PACASSIGN_USER improperly set."
 		exit
 	fi
 else
-	if [ "$PACASSIGN_NEEDS_ROOT" = "no" ]; then
+	if [ "$PACASSIGN_USER" = "$USER" ]; then
 		if [ -n "$XDG_DATA_HOME" ]; then
 			datafile="$XDG_DATA_HOME/pacassign/datafile"
 		else 
 			datafile="$HOME/.local/share/pacassign/datafile"
 		fi
 	else
-		echo "Environment variable PACASSIGN_NEEDS_ROOT \
-		improperly set."
+		echo "Variable PACASSIGN_USER improperly set."
 		exit
 	fi
 fi
@@ -56,71 +54,76 @@ fi
 
 # Define all functions called later.
 showhelp () {
-cat /usr/local/share/pacassign/helpfile
+cat /usr/share/pacassign/helpfile
 }
 
-list () {
+list_spec () {
 if [ $flag = "-l" ]; then
 	filelist="`grep -f <(printf "^%s /\n" "${packages[@]}") "$datafile" \
 	| sort`"
 elif [ $flag = "-lt" ]; then
-	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
+	filelist="`grep -f <(printf "^%s \n" "${packages[@]}") "$datafile" \
 	| sort`"
 elif [ $flag = "-ll" ]; then
-	filelist="`grep -f <(printf "^%s\n" "${packages[@]}") "$datafile" \
+	filelist="`grep -f <(printf "^%s \n" "${packages[@]}") "$datafile" \
 	| sort`"
 	filelist+=" 
 `pacman -Ql "${packages[*]}" | sort`"
 fi
-echo "$filelist" | sort
+echo "$filelist" | LC_ALL=C sort
+}
+
+list_gen () {
+if [ $flag = "-l" ]; then
+	filelist="`awk '$2 != "[t]"' "$datafile"`"
+elif [ $flag = "-lt" ]; then
+	filelist="`cat "$datafile"`"
+elif [ $flag = "-ll" ]; then
+	filelist="`pacman -Ql`"
+fi
+echo "$filelist" | LC_ALL=C sort
 }
 
 owner () {
 pre_packagelist="`grep -f <(printf " %s$\n" "${files[@]}") "$datafile"`"
 if [ -z "$pre_packagelist" ]; then
-	packagelist="`pacman -Qo "${files[@]}"`"
+        packagelist="`pacman -Qo "${files[@]}"`"
 else
-	pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
-	| xargs pacman -Q`"
-	file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
-	| sed -e 's/$/ is owned by/'`"
-	packagelist="`paste -d ' ' <(echo "$file_packagelist") \
-	<(echo "$pack_packagelist") | sort`"
-	packagelist+="`pacman -Qo "${files[@]}"`"
+        pack_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 1-1 \
+        | xargs pacman -Q`"
+        file_packagelist="`echo "$pre_packagelist" | cut -d ' ' -f 2- \
+        | sed -e 's/$/ is owned by/'`"
+        packagelist="`paste -d ' ' <(echo "$file_packagelist") \
+        <(echo "$pack_packagelist") | sort`"
+        pacmanlist="`pacman -Qo "${files[@]}" 2>/dev/null`"
 fi
-echo "$packagelist"
+printf "%s\n%s\n" "$packagelist" "$pacmanlist" | sort
 }
 
 add () {
 for file in $files; do
-	get_parents $file
-	if [ -d "$file" ]; then
-		self="$file/"
-	else
-		self="$file"
-	fi
+	get_parents
 	new_datafile=""
-	_self="${self//\//\\/}"
-	add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages /" | sort`"
+	_file="${file//\//\\/}"
+	add_parent=("${parents[@]/\//$packages \/}")
 	if [ $flag = "-t" ] || [ $flag = "-at" ]; then
-		pre_datafile="`comm -13 <(echo "$add_parent") "$datafile"`"
-		add_parent="`echo "${parents[@]}" | sed -e "s/^/$packages \[t\] /" \
-		| sort`" 
-		new_datafile="`comm -3 <(echo "$add_parent") <(echo "$pre_datafile") \
-		| awk '{$1=$1;print}'`"
+		pre_datafile="`comm -13 <(printf "%s\n" "${add_parent[@]}" \
+		| sort) "$datafile"`"
+		add_parent=("${parents[@]/\//$packages [t] \/}")
+		new_datafile="`cat <(printf "%s\n" "${add_parent[@]}") \
+		<(echo "$pre_datafile") | sort | uniq`"
 	else 
-		if [ "`comm -12 <(echo "$add_parent") "$datafile" | wc -l`" = 0 ]; then
-			add_parent="`echo "${parents[@]}" \
-			| sed -e "s/^/$packages \[t\] /"`"	
+		if [ "`comm -12 <(printf "%s\n" "${add_parent[@]}") \
+		"$datafile" | wc -l`" = 0 ]; then
+			add_parent=("${parents[@]/\//$packages [t] \/}")
 		fi
 		pre_datafile="`cat "$datafile" \
-		| sed -e "s/^$packages \[t\] $_self/$packages $_self/" | sort`"
-		new_datafile+="`comm -3 <(echo "$add_parent" \
-		| sed -e "s/^$packages \[t\] $_self$/$packages $_self/") \
-		<(echo "$pre_datafile") | awk '{$1=$1;print}'`"
+		<(printf "%s\n" "${add_parent[@]}")`"
+		new_datafile="`echo "$pre_datafile" | sed -e \
+		"s/^$packages \[t\] $_file/$packages $_file/" | sort | uniq`"
 	fi
+	echo "$new_datafile" > "$datafile"
 done
-echo "$new_datafile" > "$datafile"
 echo "Assignment to $packages added."
 }
 
@@ -132,20 +135,28 @@ comm -13 <(echo "$remove_with_child") <(echo "$pre_datafile") > "$datafile"
 echo "Assignment to $packages removed."
 }
 
-# This function is used in `add ()` to list out parent directories of a path
-# and to control trailing slashes.
+# This function is used in `add ()` to list out parent directories of a path.
 get_parents () {
-if [ -d "$file" ]; then
-	trail_slash="yes"
-fi
-parentlist=(`echo "$file" | tr '/' '\n'`)
+parentlist_with_child=(`echo "$file" | tr '/' '\n'`)
+parentlist=(${parentlist_with_child[@]::${#parentlist_with_child[@]}-1})
+parents=()
 substring=""
 for i in "${!parentlist[@]}"; do
-	substring+="/${parentlist[index]}"
-	if [ "$trail_slash" = "yes" ]; then
-		parents="`printf "$substring/\n"`"
-	else
-		parents="`printf "$substring\n"`"
+	substring+="/${parentlist[i]}"
+	parents+=("`printf "%s/\n" "$substring"`")
+done
+parents+=("$file")
+}
+
+# This function is used to add trailing slashes to directory paths, to match
+# what pacman itself does.
+add_trailing_slashes () {
+files=()
+for file in ${pre_files[@]}; do
+	if [ -d "$file" ]; then 
+		files+=("`printf "%s/" "$file"`")
+	else 
+		files+=("`printf "%s" "$file"`")
 	fi
 done
 }
@@ -158,7 +169,11 @@ if [ $oper = "list" ]; then
 		"Package not found; use 'pacassign -h' for help"; exit; }
 	done
 	packages=( "$@" )
-	list 
+	if [ -z "$packages" ]; then
+		list_gen
+	else
+		list_spec
+	fi 
 elif [ $oper = "owner" ]; then
 	if [ $# = "0" ]; then
 		echo "Not enough arguments; use 'pacassign -h' for help"
@@ -168,8 +183,9 @@ elif [ $oper = "owner" ]; then
 		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	pre_files=( "$@" )
-	files="`realpath "${pre_files[@]}"`"
+	file_args=( "$@" )
+	pre_files=("`realpath "${file_args[@]}"`")
+	add_trailing_slashes
 	owner
 elif [ $oper = "add" ]; then
 	pacman -Qq "${@: -1}" &>/dev/null || { echo \
@@ -178,8 +194,9 @@ elif [ $oper = "add" ]; then
 		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	pre_files=("${@:1:$#-1}")
-	files="`realpath "${pre_files[@]}"`"
+	file_args=("${@:1:$#-1}")
+	pre_files=("`realpath "${file_args[@]}"`")
+	add_trailing_slashes
 	packages="${@: -1}"
 	add
 elif [ $oper = "remove" ]; then
@@ -189,10 +206,11 @@ elif [ $oper = "remove" ]; then
 		test -e ${i} || { echo \
 		"File not found; use 'pacassign -h' for help"; exit; }
 	done
-	pre_files=("${@:1:$#-1}")
-	files="`realpath "${pre_files[@]}"`"
+	file_args=("${@:1:$#-1}")
+	pre_files=("`realpath "${file_args[@]}"`")
+	add_trailing_slashes
 	packages="${@: -1}"
 	remove
 elif [ $oper = "showhelp" ]; then
 	showhelp
-fi
+fi		
